@@ -2,11 +2,17 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 
+# pip install Flask-Login
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+app.config['SECRET_KEY'] = 'your-secret-key'
+
 db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,6 +42,26 @@ class PlaylistTrack(db.Model):
     playlist_id = db.Column(db.Integer, db.ForeignKey('playlist.id'), nullable=False)
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
     position = db.Column(db.Integer, nullable=False)
+
+#Load User -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+#Login -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid JSON data'}), 400
+
+    user = User.query.filter_by(username=data['username']).first_or_404()
+    if not check_password_hash(user.password, data['password']):
+        return jsonify({'message': 'Login Unsuccessful'}), 401
+
+    login_user(user)  # Login do usuário
+
+    return jsonify({'message': 'Login Successful'}), 200
 
 
 @app.route('/register', methods=['POST'])
@@ -120,6 +146,7 @@ def search_content():
 
 #Criar e editar listas de reprodução -=--=--=--=--=--=--=
 @app.route('/playlists', methods=['GET'])
+@login_required
 def get_playlists():
     playlists = Playlist.query.filter_by(user_id=current_user.id).all()
     return jsonify([{'id': p.id, 'name': p.name, 'created_at': p.created_at} for p in playlists]), 200
