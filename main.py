@@ -40,7 +40,10 @@ class PlaylistTrack(db.Model):
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid JSON data'}), 400
+
     hashed_password = generate_password_hash(data['password'], method='sha256')
     new_user = User(username=data['username'], email=data['email'], password=hashed_password)
     db.session.add(new_user)
@@ -51,9 +54,12 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    user = User.query.filter_by(username=data['username']).first()
-    if not user or not check_password_hash(user.password, data['password']):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid JSON data'}), 400
+
+    user = User.query.filter_by(username=data['username']).first_or_404()
+    if not check_password_hash(user.password, data['password']):
         return jsonify({'message': 'Login Unsuccessful'}), 401
 
     return jsonify({'message': 'Login Successful'}), 200
@@ -67,10 +73,7 @@ def get_content():
 # Visualização de detalhes -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
 @app.route('/content/<id>', methods=['GET'])
 def get_content_details(id):
-    content = Content.query.get(id)
-    if not content:
-        return jsonify({'message': 'Content not found'}), 404
-
+    content = Content.query.get_or_404(id)
     return jsonify({'title': content.title, 'synopsis': content.synopsis, 'cast': content.cast, 'director': content.director, 'average_rating': content.average_rating}), 200
 
 #Tabela armazena o hsitorico de views  -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
@@ -84,10 +87,7 @@ class ViewingHistory(db.Model):
 #Reproduzir os videos e registrar que foi reproduzido -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
 @app.route('/content/<id>/play', methods=['POST'])
 def play_content(id):
-    content = Content.query.get(id)
-    if not content:
-        return jsonify({'message': 'Content not found'}), 404
-
+    content = Content.query.get_or_404(id)
     # Aqui você pode adicionar código para registrar que o usuário assistiu este conteúdo
     history = ViewingHistory(user_id=current_user.id, content_id=content.id)
     db.session.add(history)
@@ -118,8 +118,7 @@ def search_content():
 
     return jsonify([{'title': c.title, 'synopsis': c.synopsis, 'cast': c.cast, 'director': c.director, 'average_rating': c.average_rating} for c in content]), 200
 
-#Criar e editar listas de reprodução -=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=-
-
+#Criar e editar listas de reprodução -=--=--=--=--=--=--=
 @app.route('/playlists', methods=['GET'])
 def get_playlists():
     playlists = Playlist.query.filter_by(user_id=current_user.id).all()
